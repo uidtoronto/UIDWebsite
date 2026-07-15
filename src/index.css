@@ -1,0 +1,441 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --uid-navy: #0D4D7C;
+  --uid-teal: #3EC8C8;
+  --uid-teal-dark: #2AACAC;
+  --uid-dark: #061E30;
+  --uid-mid: #1A6A9A;
+  --white: #FFFFFF;
+  --off-white: #F7FAFC;
+  --silver: #E5E7EB;
+  --text-mid: #3D6480;
+  --text-soft: #7A9BB5;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  color: var(--uid-dark);
+  overflow-x: hidden;
+}
+
+/* ── LOADING SCREEN ── */
+#loader {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+#loader.exit {
+  animation: loaderExit 0.6s ease-in forwards;
+  animation-delay: 0s;
+}
+
+@keyframes loaderExit {
+  to { opacity: 0; transform: translateY(-40px); pointer-events: none; }
+}
+
+/* Petal SVG draw animations */
+.petal-path {
+  fill: none;
+  stroke-dasharray: var(--len, 300);
+  stroke-dashoffset: var(--len, 300);
+}
+
+.petal-path.draw {
+  animation: drawStroke 0.65s ease-out forwards, petalFill 0.35s ease-out forwards;
+  animation-delay: var(--delay, 0ms), calc(var(--delay, 0ms) + 0.55s);
+}
+
+@keyframes drawStroke {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes petalFill {
+  from { fill: transparent; }
+  to   { fill: var(--fill-color); }
+}
+
+.loader-wordmark {
+  opacity: 0;
+  animation: wordmarkIn 0.6s ease-out forwards;
+  animation-delay: 0.85s;
+}
+@keyframes wordmarkIn {
+  from { opacity: 0; letter-spacing: -0.08em; }
+  to   { opacity: 1; letter-spacing: normal; }
+}
+
+.loader-divider {
+  width: 1px;
+  height: 0;
+  background: var(--uid-navy);
+  animation: dividerGrow 0.35s ease-out forwards;
+  animation-delay: 0.95s;
+}
+@keyframes dividerGrow {
+  to { height: 40px; }
+}
+
+.loader-toronto {
+  opacity: 0;
+  transform: translateX(8px);
+  animation: torontoIn 0.45s ease-out forwards;
+  animation-delay: 1.05s;
+}
+@keyframes torontoIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.loader-progress-bar {
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--uid-teal), var(--uid-teal-dark));
+  border-radius: 99px;
+  animation: progressSweep 0.9s ease-out forwards;
+  animation-delay: 1.15s;
+}
+@keyframes progressSweep {
+  to { width: 200px; }
+}
+
+.loader-tagline {
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out forwards;
+  animation-delay: 1.4s;
+}
+
+@keyframes fadeIn { to { opacity: 1; } }
+
+/* ── SCROLL INDICATOR ── */
+.scroll-indicator {
+  opacity: 0;
+  animation: fadeIn 0.6s ease-out forwards;
+  animation-delay: 2s;
+}
+.scroll-thumb {
+  animation: scrollThumb 2.2s ease-in-out infinite;
+}
+@keyframes scrollThumb {
+  0%   { transform: translateY(0); opacity: 0; }
+  15%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(32px); opacity: 0; }
+}
+
+/* ── HERO ORBS FLOAT ── */
+@keyframes floatOrb {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-20px); }
+}
+
+/* ── HERO PARTICLES ── */
+@keyframes riseParticle {
+  0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+  8%   { opacity: 1; }
+  85%  { opacity: 0.7; }
+  100% { transform: translateY(-320px) scale(1); opacity: 0; }
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(62,200,200,0.7), transparent);
+  animation: riseParticle var(--dur, 18s) ease-in infinite;
+  animation-delay: var(--dly, 0s);
+  bottom: 0;
+  pointer-events: none;
+}
+
+/* ── STAR SPIN ── */
+@keyframes spin40 { to { transform: rotate(360deg); } }
+@keyframes spin70 { to { transform: rotate(-360deg); } }
+
+/* ── PULSING DOT ── */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.6); opacity: 0.5; }
+}
+.pulse-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: var(--uid-teal);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ── MEMBERSHIP GLOW ── */
+@keyframes memberGlow {
+  0%, 100% { box-shadow: 0 0 40px rgba(62,200,200,0.12), 0 20px 60px rgba(13,77,124,0.08); }
+  50%       { box-shadow: 0 0 60px rgba(62,200,200,0.28), 0 24px 80px rgba(13,77,124,0.12); }
+}
+
+/* ── TWINKLE STARS ── */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 1; }
+}
+
+/* ── BORDER TRACE ── */
+@keyframes borderTrace {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+/* ── SHIMMER SWEEP ── */
+.shimmer-btn {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.22) 50%, transparent 60%);
+  transform: translateX(-100%) skewX(-20deg);
+  transition: none;
+}
+.shimmer-btn:hover::after {
+  animation: shimmerSlide 0.55s ease-out forwards;
+}
+@keyframes shimmerSlide {
+  to { transform: translateX(200%) skewX(-20deg); }
+}
+
+/* ── FADEUP ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  opacity: 0;
+  animation: fadeUp 0.9s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+
+/* ── INTERSECTION OBSERVER CLASSES ── */
+.reveal-left {
+  opacity: 0;
+  transform: translateX(-60px);
+  transition: opacity 0.75s ease-out, transform 0.75s ease-out;
+}
+.reveal-right {
+  opacity: 0;
+  transform: translateX(60px);
+  transition: opacity 0.75s ease-out, transform 0.75s ease-out;
+}
+.reveal-up {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.65s ease-out, transform 0.65s ease-out;
+}
+.revealed {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* ── NAV UNDERLINE ── */
+.nav-link {
+  position: relative;
+  color: var(--text-mid);
+  transition: color 0.3s;
+  font-size: 14px;
+  font-weight: 400;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  background: var(--uid-teal);
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s cubic-bezier(0.22,1,0.36,1);
+}
+.nav-link:hover {
+  color: var(--uid-navy);
+}
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+
+/* ── OTTOMAN STAR PATTERN ── */
+.ottoman-bg {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(13,77,124,0.04) 0, rgba(13,77,124,0.04) 1px, transparent 0, transparent 50%),
+    repeating-linear-gradient(-45deg, rgba(13,77,124,0.04) 0, rgba(13,77,124,0.04) 1px, transparent 0, transparent 50%);
+  background-size: 60px 60px;
+}
+
+/* ── SOCIAL ICON HOVER ── */
+.social-icon {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  transition: background 0.3s, border-color 0.3s, color 0.3s, transform 0.3s;
+}
+.social-icon:hover {
+  background: rgba(62,200,200,0.18);
+  border-color: var(--uid-teal);
+  color: var(--uid-teal);
+  transform: scale(1.1);
+}
+
+/* ── MOBILE DRAWER ── */
+.mobile-drawer {
+  /* transform + transition handled inline for open/close state */
+}
+
+/* ── WORKS FILTER ── */
+.works-grid-container {
+  transition: opacity 0.2s;
+}
+.works-grid-container.filtering {
+  opacity: 0;
+}
+
+/* ── CARD HOVER ── */
+.byk-card {
+  transition: transform 0.4s ease-out, box-shadow 0.4s ease-out, border-color 0.4s;
+}
+.byk-card:hover {
+  transform: translateY(-7px);
+  box-shadow: 0 24px 48px rgba(13,77,124,0.1);
+  border-color: rgba(62,200,200,0.35);
+}
+.byk-card:hover .photo-circle {
+  border-style: solid;
+  border-color: var(--uid-teal);
+  box-shadow: 0 0 16px rgba(62,200,200,0.3);
+}
+
+.mission-card {
+  transition: transform 0.4s ease-out, box-shadow 0.4s ease-out;
+}
+.mission-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 28px 56px rgba(13,77,124,0.1);
+}
+.mission-card:hover .card-accent {
+  opacity: 1;
+}
+
+/* ── FLOATING ROSETTE ── */
+@keyframes floatRosette {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-18px); }
+}
+
+/* ── FAQ ACCORDION ── */
+.faq-item-enter {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.faq-item-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+
+/* ── PRICING CARD HOVER ── */
+.pricing-card {
+  transition: transform 0.35s ease-out, box-shadow 0.35s ease-out;
+}
+.pricing-card:hover {
+  transform: translateY(-6px);
+}
+
+/* ── STATS BAR ── */
+.hero-stats-bar {
+  display: flex;
+  gap: 2.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .hero-stats-bar {
+    gap: 1.5rem;
+  }
+}
+
+/* ── MOBILE RESPONSIVE ── */
+
+/* Section padding */
+@media (max-width: 768px) {
+  .section-pad {
+    padding-top: 4rem !important;
+    padding-bottom: 4rem !important;
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+
+  /* Mission/Vision cards stack */
+  .mission-flex {
+    flex-direction: column !important;
+    gap: 1.5rem !important;
+  }
+
+  /* BYK featured cards full-width */
+  .byk-featured-card {
+    width: calc(50% - 0.625rem) !important;
+    min-width: 160px !important;
+  }
+
+  /* Footer grid single column */
+  .footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 2rem !important;
+  }
+
+  /* Footer bottom bar stack */
+  .footer-bar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+  }
+
+  /* Hero scroll indicator hide on small screens */
+  .scroll-indicator {
+    display: none !important;
+  }
+
+  /* Hero CTA buttons stack */
+  .hero-ctas {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+  .hero-ctas button {
+    width: 100% !important;
+  }
+
+  /* Newsletter form name grid stack */
+  .nl-name-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .byk-featured-card {
+    width: 100% !important;
+    max-width: 260px !important;
+  }
+}
