@@ -344,6 +344,42 @@ body {
   50%       { transform: translateY(-18px); }
 }
 
+/* ── TOAST IN ── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(40px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* ── ADMIN FADE/STAGGER ── */
+@keyframes adminFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.admin-fade-up {
+  animation: adminFadeUp 0.45s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+
+/* ── MODAL BACKDROP ── */
+@keyframes modalBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modalPanelIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── STATUS DOT PULSE ── */
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* ── ADMIN AUTH INPUT FOCUS ── */
+.admin-input:focus {
+  border-color: var(--uid-teal) !important;
+}
+
 /* ── FAQ ACCORDION ── */
 .faq-item-enter {
   opacity: 0;

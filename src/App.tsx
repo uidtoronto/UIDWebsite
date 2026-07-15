@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LangProvider } from './context/LangContext';
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import LoadingScreen from './components/LoadingScreen';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
@@ -17,6 +18,14 @@ import Dashboard from './pages/Dashboard';
 import AuthGuard from './components/auth/AuthGuard';
 import ExecGuard from './components/auth/ExecGuard';
 import ExecLayout from './components/exec/ExecLayout';
+
+// Member Management Admin
+import ProtectedRoute from './components/admin/ProtectedRoute';
+import AdminLayout from './components/admin/AdminLayout';
+import AdminLogin from './pages/admin/AdminLogin';
+import AdminSignup from './pages/admin/AdminSignup';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import MemberList from './pages/admin/MemberList';
 
 // Exec Pages
 import ExecHome from './pages/exec/ExecHome';
@@ -77,6 +86,14 @@ function AppRoutes() {
       <Route path="/payment-cancelled" element={<PaymentCancelled />} />
       <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
       <Route path="/exec/*" element={<AuthGuard><ExecDashboardRoutes /></AuthGuard>} />
+
+      {/* Member Management Admin */}
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin/signup" element={<AdminSignup />} />
+      <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+        <Route index element={<AdminDashboard />} />
+        <Route path="members" element={<MemberList />} />
+      </Route>
     </Routes>
   );
 }
@@ -89,10 +106,12 @@ export default function App() {
     <LangProvider>
       <AuthProvider>
         <BrowserRouter>
-          {!loaded && <LoadingScreen onDone={handleDone} />}
-          <div style={{ visibility: loaded ? 'visible' : 'hidden' }}>
-            <AppRoutes />
-          </div>
+          <ToastProvider>
+            {!loaded && <LoadingScreen onDone={handleDone} />}
+            <div style={{ visibility: loaded ? 'visible' : 'hidden' }}>
+              <AppRoutes />
+            </div>
+          </ToastProvider>
         </BrowserRouter>
       </AuthProvider>
     </LangProvider>

@@ -183,3 +183,32 @@ export interface ExecNotification {
   link?: string;
   created_at?: string;
 }
+
+// ───────────────────────────────────────────────────────────
+// Member Management Types
+// ───────────────────────────────────────────────────────────
+
+export type MemberStatus = 'active' | 'inactive' | 'pending' | 'suspended';
+
+export interface Member {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone?: string | null;
+  city?: string | null;
+  status: MemberStatus;
+  created_at: string;
+}
+
+// Row shape for create/update operations (id + created_at are server-managed)
+export type MemberInput = Omit<Member, 'id' | 'created_at'>;
+
+export type MemberSortKey = 'name' | 'email' | 'city' | 'created_at';
+
+export type SortDirection = 'asc' | 'desc';
+
+export interface MemberStats {
+  total: number;
+  byStatus: { status: MemberStatus; count: number }[];
+}
