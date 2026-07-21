@@ -15,6 +15,7 @@ import Membership from './pages/Membership';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancelled from './pages/PaymentCancelled';
 import Dashboard from './pages/Dashboard';
+import { PricingPage } from './pages/PricingPage';
 import AuthGuard from './components/auth/AuthGuard';
 import ExecGuard from './components/auth/ExecGuard';
 import ExecLayout from './components/exec/ExecLayout';
@@ -84,6 +85,7 @@ function AppRoutes() {
       <Route path="/membership" element={<Membership />} />
       <Route path="/payment-success" element={<PaymentSuccess />} />
       <Route path="/payment-cancelled" element={<PaymentCancelled />} />
+      <Route path="/pricing" element={<PricingPage />} />
       <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
       <Route path="/exec/*" element={<AuthGuard><ExecDashboardRoutes /></AuthGuard>} />
 

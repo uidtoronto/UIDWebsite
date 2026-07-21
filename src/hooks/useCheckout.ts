@@ -8,6 +8,8 @@ interface CheckoutOptions {
   cancelPath?: string;
 }
 
+// Calls the `stripe-checkout` Supabase Edge Function to create a Stripe
+// Checkout Session, then redirects the browser to the Stripe-hosted page.
 export function useCheckout() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,7 @@ export function useCheckout() {
   const startCheckout = async ({
     priceId,
     mode,
-    successPath = '/success',
+    successPath = '/payment-success',
     cancelPath = '/pricing',
   }: CheckoutOptions) => {
     setLoading(true);
@@ -29,7 +31,7 @@ export function useCheckout() {
       if (!session) throw new Error('You must be signed in to continue.');
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
         {
           method: 'POST',
           headers: {
@@ -37,10 +39,10 @@ export function useCheckout() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            priceId,
+            price_id: priceId,
             mode,
-            successUrl: `${window.location.origin}${successPath}`,
-            cancelUrl: `${window.location.origin}${cancelPath}`,
+            success_url: `${window.location.origin}${successPath}`,
+            cancel_url: `${window.location.origin}${cancelPath}`,
           }),
         }
       );

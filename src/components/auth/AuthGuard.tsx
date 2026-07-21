@@ -1,18 +1,22 @@
 import { type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSubscription } from '../../hooks/useSubscription';
 
 interface AuthGuardProps {
   children: ReactNode;
 }
 
-// Protects /dashboard — redirects to /login when unauthenticated.
-// Authenticated users with pending/expired membership are still
-// allowed through; the Dashboard component renders a payment prompt.
+// Protects /dashboard — requires an authenticated user with an active
+// subscription. Non-authenticated users are sent to /login; authenticated
+// users without an active subscription are sent to /pricing.
 export default function AuthGuard({ children }: AuthGuardProps) {
   const { isAuthenticated, isLoading } = useAuth();
+  const { isActive, loading: subLoading } = useSubscription();
 
-  if (isLoading) {
+  const loading = isLoading || subLoading;
+
+  if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(165deg, #F0F9FF 0%, #EAF5F5 35%, #F7FAFC 65%, #FFFFFF 100%)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
@@ -27,5 +31,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isActive) return <Navigate to="/pricing" replace />;
   return <>{children}</>;
 }

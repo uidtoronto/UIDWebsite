@@ -30,11 +30,11 @@ export default function PaymentCancelled() {
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link to="/membership" className="shimmer-btn" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 32px', borderRadius: '99px', fontSize: '15px', fontWeight: 500, background: 'linear-gradient(135deg, #0D4D7C, #1A6A9A)', color: '#fff', textDecoration: 'none', fontFamily: "'DM Sans', sans-serif", transition: 'transform 0.3s, box-shadow 0.3s' }}
+          <Link to="/pricing" className="shimmer-btn" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 32px', borderRadius: '99px', fontSize: '15px', fontWeight: 500, background: 'linear-gradient(135deg, #0D4D7C, #1A6A9A)', color: '#fff', textDecoration: 'none', fontFamily: "'DM Sans', sans-serif", transition: 'transform 0.3s, box-shadow 0.3s' }}
             onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(13,77,124,0.3)'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}>
             <RotateCcw size={17} />
-            Try Again
+            Back to Pricing
           </Link>
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 32px', borderRadius: '99px', fontSize: '15px', fontWeight: 400, background: 'rgba(255,255,255,0.75)', border: '1.5px solid rgba(13,77,124,0.2)', color: 'var(--uid-navy)', textDecoration: 'none', fontFamily: "'DM Sans', sans-serif", transition: 'border-color 0.3s, color 0.3s, transform 0.3s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--uid-teal)'; e.currentTarget.style.color = 'var(--uid-teal)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}

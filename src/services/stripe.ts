@@ -1,45 +1,5 @@
-// ───────────────────────────────────────────────────────────
-// Stripe Checkout Service
-//
-// Currently using a Stripe Payment Link for checkout.  When you are
-// ready to move to full Stripe Sessions with webhooks:
-//
-//   1.  Add the following values to your `.env` file:
-//
-//         VITE_STRIPE_PUBLISHABLE_KEY=pk_live_or_test_...
-//
-//       The secret key and webhook secret live server-side only
-//       (e.g. in a Supabase Edge Function or backend route):
-//
-//         STRIPE_SECRET_KEY=sk_live_or_test_...
-//         STRIPE_WEBHOOK_SECRET=whsec_...
-//
-//   2.  Uncomment the Stripe imports and replace the TODO bodies
-//       with the real Stripe calls.  The function signatures and
-//       return types stay the same, so no UI changes are needed.
-//
-//   3.  Create a Supabase Edge Function (or backend endpoint) that:
-//       - Receives the checkout request from the client.
-//       - Uses STRIPE_SECRET_KEY to create a Checkout Session.
-//       - Returns the session URL (or session ID) to the client.
-//       - Has a separate webhook handler that receives Stripe events
-//         and updates `membership_status` in the `profiles` table.
-//
-//   4.  In the Stripe Dashboard, configure the Payment Link's
-//       "After payment" → "Success URL" to:
-//         https://yourdomain.com/payment-success
-//       and "Cancel URL" to:
-//         https://yourdomain.com/payment-cancelled
-// ───────────────────────────────────────────────────────────
-
+import { supabase } from '../lib/supabase';
 import type { MembershipType } from '../types';
-
-// Stripe Payment Link (test mode)
-const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_cNieVc22UasGca21Ak3gk00';
-
-// import { loadStripe } from '@stripe/stripe-js';
-// const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string;
-// export const stripePromise = loadStripe(stripePublishableKey);
 
 export type PlanId = 'monthly' | 'annual';
 
@@ -94,116 +54,104 @@ export interface CheckoutSession {
   url: string;
 }
 
-const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
-
 // ── createCheckoutSession ───────────────────────────────────────
-//
-// In production this calls a Supabase Edge Function (or backend
-// route) that uses STRIPE_SECRET_KEY server-side to create a Stripe
-// Checkout Session and returns `{ sessionId, url }`.
-//
+// Calls the `stripe-checkout` Supabase Edge Function which creates a
+// Stripe Checkout Session server-side using STRIPE_SECRET_KEY.
 export async function createCheckoutSession(plan: PlanId): Promise<{ session?: CheckoutSession; error?: string }> {
-  await delay(600);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { error: 'You must be signed in to continue.' };
 
-  // TODO: replace with real Stripe Checkout Session via backend:
-  //
-  // const res = await fetch('/api/create-checkout-session', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ plan }),
-  // });
-  // if (!res.ok) return { error: 'Failed to create checkout session' };
-  // const data = await res.json();
-  // return { session: { sessionId: data.sessionId, url: data.url } };
+    const priceId = plan === 'annual'
+      ? 'price_1TsHPICIqsWOqM1zVMCiDCJZ'
+      : 'price_1TsHOtCIqsWOqM1z3shb8WMU';
 
-  // Using Stripe Payment Link with success/cancel URLs appended
-  const baseUrl = window.location.origin;
-  const successUrl = `${baseUrl}/payment-success?plan=${plan}`;
-  const cancelUrl = `${baseUrl}/payment-cancelled`;
-  const url = `${STRIPE_PAYMENT_LINK}?client_reference_id=${plan}&success_url=${encodeURIComponent(successUrl)}&cancel_url=${encodeURIComponent(cancelUrl)}`;
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          price_id: priceId,
+          mode: 'subscription',
+          success_url: `${window.location.origin}/payment-success`,
+          cancel_url: `${window.location.origin}/pricing`,
+        }),
+      }
+    );
 
-  console.info('[stripe.createCheckoutSession] redirecting to Payment Link for plan:', plan);
-  return {
-    session: {
-      sessionId: `pl_${plan}_${Date.now()}`,
-      url,
-    },
-  };
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      return { error: body?.error || 'Failed to create checkout session' };
+    }
+
+    const data = await response.json();
+    return { session: { sessionId: data.sessionId, url: data.url } };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Checkout failed' };
+  }
 }
 
 // ── redirectToCheckout ────────────────────────────────────────────
-//
-// In production this uses the Stripe.js client-side library to
-// redirect the browser to the Stripe-hosted checkout page.
-//
+// Redirects the browser to the Stripe-hosted checkout page.
 export async function redirectToCheckout(session: CheckoutSession): Promise<{ error?: string }> {
-  // Using Payment Link: redirect the browser to the Stripe-hosted page
-  window.location.href = session.url;
-  return {};
-
-  // TODO: real implementation using Stripe.js:
-  //
-  // const stripe = await stripePromise;
-  // if (!stripe) return { error: 'Stripe failed to load' };
-  // const { error } = await stripe.redirectToCheckout({ sessionId: session.sessionId });
-  // return { error: error?.message };
+  if (session.url) {
+    window.location.href = session.url;
+    return {};
+  }
+  return { error: 'No checkout URL available' };
 }
 
 // ── verifyPayment ────────────────────────────────────────────────
-//
-// In production this calls the backend to verify the payment status
-// for a given session ID (or relies on the webhook to update
-// `membership_status` in Supabase, then fetches the profile).
-//
-export async function verifyPayment(sessionId: string): Promise<{ paid: boolean; error?: string }> {
-  await delay(500);
+// After returning from Stripe, polls the `stripe_user_subscriptions`
+// view (kept in sync by the webhook) to confirm the subscription is active.
+export async function verifyPayment(_sessionId: string): Promise<{ paid: boolean; error?: string }> {
+  try {
+    // Poll a few times — the webhook may take a moment to process
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const { data, error } = await supabase
+        .from('stripe_user_subscriptions')
+        .select('subscription_status')
+        .maybeSingle();
 
-  // When using Payment Links, Stripe redirects back to the success_url
-  // after payment.  The user landing on /payment-success is confirmation.
-  // For full verification, use a webhook + backend lookup:
-  //
-  // const res = await fetch('/api/verify-payment', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ sessionId }),
-  // });
-  // if (!res.ok) return { paid: false, error: 'Verification failed' };
-  // const data = await res.json();
-  // return { paid: data.paid };
+      if (error) return { paid: false, error: error.message };
 
-  console.info('[stripe.verifyPayment] verifying session:', sessionId);
-  return { paid: true };
+      const status = data?.subscription_status;
+      if (status === 'active' || status === 'trialing') {
+        return { paid: true };
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    return { paid: false, error: 'Payment not confirmed yet. If you completed payment, please refresh in a moment.' };
+  } catch (e) {
+    return { paid: false, error: e instanceof Error ? e.message : 'Verification failed' };
+  }
 }
 
 // ── activateMembership ────────────────────────────────────────────
-//
-// After the webhook confirms payment, the backend updates the
-// profile's `membership_status` to `active`.  This client-side
-// helper refreshes the local user object so the dashboard unlocks
-// immediately without a page reload.
-//
+// The webhook is the source of truth for subscription state. This
+// client helper updates the user's auth metadata so the UI unlocks
+// immediately after the webhook confirms the subscription.
 export async function activateMembership(plan: PlanId): Promise<{ membershipType?: MembershipType; error?: string }> {
-  await delay(500);
+  try {
+    const renewalDate = plan === 'annual'
+      ? new Date(Date.now() + 365 * 864e5).toISOString()
+      : new Date(Date.now() + 30 * 864e5).toISOString();
 
-  // TODO: real implementation:
-  //
-  // const { data: { user } } = await supabase.auth.getUser();
-  // if (!user) return { error: 'Not authenticated' };
-  // const { data, error } = await supabase
-  //   .from('profiles')
-  //   .update({
-  //     membership_status: 'active',
-  //     membership_type: plan === 'annual' ? 'individual' : 'individual',
-  //     renewal_date: plan === 'annual'
-  //       ? new Date(Date.now() + 365 * 864e5).toISOString()
-  //       : new Date(Date.now() + 30 * 864e5).toISOString(),
-  //   })
-  //   .eq('id', user.id)
-  //   .select()
-  //   .single();
-  // if (error) return { error: error.message };
-  // return { membershipType: data.membership_type };
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        membership_status: 'active',
+        membership_type: 'individual',
+        renewal_date: renewalDate,
+      },
+    });
 
-  console.info('[stripe.activateMembership] mock activation for plan:', plan);
-  return { membershipType: 'individual' };
+    if (error) return { error: error.message };
+    return { membershipType: 'individual' };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Activation failed' };
+  }
 }

@@ -2,20 +2,38 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
+// ───────────────────────────────────────────────────────────
+// Stripe Webhook Endpoint
+//
+// Verifies the Stripe signature on every request, then dispatches
+// each event to a handler that keeps the `stripe_subscriptions`
+// table in sync with Stripe. This table is the source of truth for
+// subscription status; the client reads it through the
+// `stripe_user_subscriptions` view.
+//
+// Events handled:
+//   - checkout.session.completed
+//   - customer.subscription.updated
+//   - customer.subscription.deleted
+//   - invoice.paid
+//   - invoice.payment_failed
+// ───────────────────────────────────────────────────────────
+
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
 const stripe = new Stripe(stripeSecret, {
-  appInfo: {
-    name: 'Bolt Integration',
-    version: '1.0.0',
-  },
+  appInfo: { name: 'Bolt Integration', version: '1.0.0' },
 });
 
-const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+// Service-role client — bypasses RLS so the webhook can write.
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+);
 
 Deno.serve(async (req) => {
   try {
-    // Handle OPTIONS request for CORS preflight
+    // CORS preflight
     if (req.method === 'OPTIONS') {
       return new Response(null, { status: 204 });
     }
@@ -24,19 +42,17 @@ Deno.serve(async (req) => {
       return new Response('Method not allowed', { status: 405 });
     }
 
-    // get the signature from the header
+    // Stripe sends the signature in this header
     const signature = req.headers.get('stripe-signature');
-
     if (!signature) {
       return new Response('No signature found', { status: 400 });
     }
 
-    // get the raw body
+    // Raw body is required for signature verification
     const body = await req.text();
 
-    // verify the webhook signature
+    // Verify the webhook signature — rejects forged/invalid requests
     let event: Stripe.Event;
-
     try {
       event = await stripe.webhooks.constructEventAsync(body, signature, stripeWebhookSecret);
     } catch (error: any) {
@@ -44,6 +60,7 @@ Deno.serve(async (req) => {
       return new Response(`Webhook signature verification failed: ${error.message}`, { status: 400 });
     }
 
+    // Process asynchronously so we return 200 quickly (Stripe retries on non-2xx)
     EdgeRuntime.waitUntil(handleEvent(event));
 
     return Response.json({ received: true });
@@ -53,81 +70,133 @@ Deno.serve(async (req) => {
   }
 });
 
+// ── Event dispatcher ──
 async function handleEvent(event: Stripe.Event) {
   const stripeData = event?.data?.object ?? {};
+  if (!stripeData) return;
 
-  if (!stripeData) {
-    return;
-  }
-
-  if (!('customer' in stripeData)) {
-    return;
-  }
-
-  // for one time payments, we only listen for the checkout.session.completed event
-  if (event.type === 'payment_intent.succeeded' && event.data.object.invoice === null) {
-    return;
-  }
-
-  const { customer: customerId } = stripeData;
-
-  if (!customerId || typeof customerId !== 'string') {
-    console.error(`No customer received on event: ${JSON.stringify(event)}`);
-  } else {
-    let isSubscription = true;
-
-    if (event.type === 'checkout.session.completed') {
-      const { mode } = stripeData as Stripe.Checkout.Session;
-
-      isSubscription = mode === 'subscription';
-
-      console.info(`Processing ${isSubscription ? 'subscription' : 'one-time payment'} checkout session`);
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(stripeData as Stripe.Checkout.Session);
+        break;
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(stripeData as Stripe.Subscription);
+        break;
+      case 'customer.subscription.deleted':
+        await handleSubscriptionDeleted(stripeData as Stripe.Subscription);
+        break;
+      case 'invoice.paid':
+        await handleInvoicePaid(stripeData as Stripe.Invoice);
+        break;
+      case 'invoice.payment_failed':
+        await handleInvoicePaymentFailed(stripeData as Stripe.Invoice);
+        break;
+      default:
+        console.info(`Unhandled event type: ${event.type}`);
     }
-
-    const { mode, payment_status } = stripeData as Stripe.Checkout.Session;
-
-    if (isSubscription) {
-      console.info(`Starting subscription sync for customer: ${customerId}`);
-      await syncCustomerFromStripe(customerId);
-    } else if (mode === 'payment' && payment_status === 'paid') {
-      try {
-        // Extract the necessary information from the session
-        const {
-          id: checkout_session_id,
-          payment_intent,
-          amount_subtotal,
-          amount_total,
-          currency,
-        } = stripeData as Stripe.Checkout.Session;
-
-        // Insert the order into the stripe_orders table
-        const { error: orderError } = await supabase.from('stripe_orders').insert({
-          checkout_session_id,
-          payment_intent_id: payment_intent,
-          customer_id: customerId,
-          amount_subtotal,
-          amount_total,
-          currency,
-          payment_status,
-          status: 'completed', // assuming we want to mark it as completed since payment is successful
-        });
-
-        if (orderError) {
-          console.error('Error inserting order:', orderError);
-          return;
-        }
-        console.info(`Successfully processed one-time payment for session: ${checkout_session_id}`);
-      } catch (error) {
-        console.error('Error processing one-time payment:', error);
-      }
-    }
+  } catch (error) {
+    console.error(`Error handling event ${event.type}:`, error);
+    throw error;
   }
 }
 
-// based on the excellent https://github.com/t3dotgg/stripe-recommendations
+// ── checkout.session.completed ──
+// Fires when a checkout succeeds. For subscriptions, sync the full
+// subscription state from Stripe. For one-time payments, record the order.
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+  if (!customerId) {
+    console.error('checkout.session.completed: no customer id');
+    return;
+  }
+
+  const isSubscription = session.mode === 'subscription';
+  console.info(`Processing ${isSubscription ? 'subscription' : 'one-time payment'} checkout for ${customerId}`);
+
+  if (isSubscription) {
+    await syncCustomerFromStripe(customerId);
+  } else if (session.mode === 'payment' && session.payment_status === 'paid') {
+    const { error } = await supabase.from('stripe_orders').insert({
+      checkout_session_id: session.id,
+      payment_intent_id: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? '',
+      customer_id: customerId,
+      amount_subtotal: session.amount_subtotal ?? 0,
+      amount_total: session.amount_total ?? 0,
+      currency: session.currency ?? 'cad',
+      payment_status: session.payment_status,
+      status: 'completed',
+    });
+    if (error) console.error('Error inserting order:', error);
+  }
+}
+
+// ── customer.subscription.updated ──
+// Fires on plan changes, status transitions, etc. Re-sync from Stripe.
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
+  if (!customerId) {
+    console.error('customer.subscription.updated: no customer id');
+    return;
+  }
+  console.info(`Subscription updated for customer: ${customerId}`);
+  await syncCustomerFromStripe(customerId);
+}
+
+// ── customer.subscription.deleted ──
+// Fires when a subscription is cancelled. Mark it as cancelled.
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
+  if (!customerId) {
+    console.error('customer.subscription.deleted: no customer id');
+    return;
+  }
+  console.info(`Subscription deleted for customer: ${customerId}`);
+
+  const { error } = await supabase.from('stripe_subscriptions').upsert(
+    {
+      customer_id: customerId,
+      subscription_id: subscription.id,
+      price_id: subscription.items.data[0]?.price.id ?? null,
+      current_period_start: subscription.current_period_start,
+      current_period_end: subscription.current_period_end,
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      status: 'canceled',
+    },
+    { onConflict: 'customer_id' },
+  );
+  if (error) console.error('Error marking subscription deleted:', error);
+}
+
+// ── invoice.paid ──
+// Fires when a recurring invoice is paid. Re-sync to refresh period dates.
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
+  if (!customerId) {
+    console.error('invoice.paid: no customer id');
+    return;
+  }
+  console.info(`Invoice paid for customer: ${customerId}`);
+  await syncCustomerFromStripe(customerId);
+}
+
+// ── invoice.payment_failed ──
+// Fires when a renewal payment fails. Re-sync to capture past_due status.
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
+  if (!customerId) {
+    console.error('invoice.payment_failed: no customer id');
+    return;
+  }
+  console.info(`Invoice payment failed for customer: ${customerId}`);
+  await syncCustomerFromStripe(customerId);
+}
+
+// ── Sync helper ──
+// Fetches the latest subscription for a customer from Stripe and upserts
+// the full state into `stripe_subscriptions`. Based on t3dotgg/stripe-recommendations.
 async function syncCustomerFromStripe(customerId: string) {
   try {
-    // fetch latest subscription data from Stripe
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       limit: 1,
@@ -135,34 +204,24 @@ async function syncCustomerFromStripe(customerId: string) {
       expand: ['data.default_payment_method'],
     });
 
-    // TODO verify if needed
     if (subscriptions.data.length === 0) {
-      console.info(`No active subscriptions found for customer: ${customerId}`);
-      const { error: noSubError } = await supabase.from('stripe_subscriptions').upsert(
-        {
-          customer_id: customerId,
-          subscription_status: 'not_started',
-        },
-        {
-          onConflict: 'customer_id',
-        },
+      console.info(`No subscriptions found for customer: ${customerId}`);
+      const { error } = await supabase.from('stripe_subscriptions').upsert(
+        { customer_id: customerId, subscription_status: 'not_started' },
+        { onConflict: 'customer_id' },
       );
-
-      if (noSubError) {
-        console.error('Error updating subscription status:', noSubError);
-        throw new Error('Failed to update subscription status in database');
-      }
+      if (error) console.error('Error updating subscription status:', error);
+      return;
     }
 
-    // assumes that a customer can only have a single subscription
+    // Assumes a single subscription per customer
     const subscription = subscriptions.data[0];
 
-    // store subscription state
-    const { error: subError } = await supabase.from('stripe_subscriptions').upsert(
+    const { error } = await supabase.from('stripe_subscriptions').upsert(
       {
         customer_id: customerId,
         subscription_id: subscription.id,
-        price_id: subscription.items.data[0].price.id,
+        price_id: subscription.items.data[0]?.price.id ?? null,
         current_period_start: subscription.current_period_start,
         current_period_end: subscription.current_period_end,
         cancel_at_period_end: subscription.cancel_at_period_end,
@@ -174,13 +233,11 @@ async function syncCustomerFromStripe(customerId: string) {
           : {}),
         status: subscription.status,
       },
-      {
-        onConflict: 'customer_id',
-      },
+      { onConflict: 'customer_id' },
     );
 
-    if (subError) {
-      console.error('Error syncing subscription:', subError);
+    if (error) {
+      console.error('Error syncing subscription:', error);
       throw new Error('Failed to sync subscription in database');
     }
     console.info(`Successfully synced subscription for customer: ${customerId}`);
