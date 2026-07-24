@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
-  Plus, Eye, Pencil, Trash2, Loader2, Users, X,
+  Plus, Eye, Pencil, Trash2, Loader2, Users, X, Download, Heart,
 } from 'lucide-react';
 import {
   listMembers, createMember, updateMember, deleteMember, getMember,
+  exportMembersCsv,
 } from '../../services/members';
 import { useToast } from '../../context/ToastContext';
 import Modal from '../../components/ui/Modal';
@@ -12,17 +13,34 @@ import MemberForm from '../../components/admin/MemberForm';
 import MemberDetail from '../../components/admin/MemberDetail';
 import { StatusBadge } from '../../components/admin/AdminField';
 import { fullName, formatDate } from '../../lib/memberUtils';
-import type { Member, MemberSortKey, SortDirection, MemberStatus, MemberInput } from '../../types';
+import type { Member, MemberSortKey, SortDirection, MemberStatus, MemberInput, PaymentStatus, RegistrationMembershipType } from '../../types';
 import type { MemberFormValues } from '../../lib/validation';
 
 type StatusFilter = MemberStatus | 'all';
+type TypeFilter = RegistrationMembershipType | 'all';
+type PayFilter = PaymentStatus | 'all';
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
+  { value: 'all', label: 'All Status' },
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
   { value: 'pending', label: 'Pending' },
   { value: 'suspended', label: 'Suspended' },
+];
+
+const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
+  { value: 'all', label: 'All Types' },
+  { value: 'adult', label: 'Adult' },
+  { value: 'student', label: 'Student' },
+  { value: 'pensioner', label: 'Pensioner' },
+];
+
+const PAY_FILTERS: { value: PayFilter; label: string }[] = [
+  { value: 'all', label: 'All Payments' },
+  { value: 'active', label: 'Paid' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 const SORT_COLUMNS: { key: MemberSortKey; label: string }[] = [
@@ -44,6 +62,8 @@ export default function MemberList() {
   const [sortBy, setSortBy] = useState<MemberSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [payFilter, setPayFilter] = useState<PayFilter>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -61,7 +81,7 @@ export default function MemberList() {
   const fetchList = useCallback(async () => {
     setLoading(true);
     setListError(null);
-    const res = await listMembers({ page, pageSize: PAGE_SIZE, sortBy, sortDir, status: statusFilter, search });
+    const res = await listMembers({ page, pageSize: PAGE_SIZE, sortBy, sortDir, status: statusFilter, membershipType: typeFilter, paymentStatus: payFilter, search });
     if (res.error) {
       setListError(res.error);
       setMembers([]);
@@ -71,7 +91,7 @@ export default function MemberList() {
       setTotal(res.data!.total);
     }
     setLoading(false);
-  }, [page, sortBy, sortDir, statusFilter, search]);
+  }, [page, sortBy, sortDir, statusFilter, typeFilter, payFilter, search]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
@@ -98,6 +118,29 @@ export default function MemberList() {
 
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // ── Export to CSV ──
+  const handleExport = async () => {
+    setExporting(true);
+    const res = await exportMembersCsv();
+    if (res.error || !res.data) {
+      toast(res.error ?? 'Export failed', 'error');
+      setExporting(false);
+      return;
+    }
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `uid-members-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Members exported successfully', 'success');
+    setExporting(false);
+  };
 
   // open create
   const openCreate = () => {
@@ -217,7 +260,8 @@ export default function MemberList() {
       </div>
 
       {/* Toolbar: search + status filter */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+      {/* Toolbar: search + filters + export */}
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: 400 }}>
           <Search size={16} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-soft)', pointerEvents: 'none' }} />
           <input
@@ -240,29 +284,28 @@ export default function MemberList() {
           )}
         </div>
 
-        {/* Status filter chips */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {STATUS_FILTERS.map(f => {
-            const active = statusFilter === f.value;
-            return (
-              <button
-                key={f.value}
-                onClick={() => { setStatusFilter(f.value); setPage(1); }}
-                style={{
-                  padding: '0.5rem 0.875rem', borderRadius: '99px',
-                  border: `1.5px solid ${active ? 'var(--uid-teal)' : 'rgba(13,77,124,0.15)'}`,
-                  background: active ? 'rgba(62,200,200,0.10)' : '#fff',
-                  color: active ? 'var(--uid-teal-dark)' : 'var(--text-mid)',
-                  cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontSize: '12.5px', fontWeight: 600,
-                  transition: 'all 0.2s',
-                }}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Export button */}
+        <button
+          onClick={handleExport}
+          disabled={exporting || members.length === 0}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '0.5rem 1rem', borderRadius: '10px',
+            border: '1.5px solid rgba(13,77,124,0.15)', background: '#fff',
+            color: 'var(--uid-navy)', cursor: exporting ? 'wait' : 'pointer',
+            fontFamily: "'DM Sans', sans-serif", fontSize: '12.5px', fontWeight: 600,
+            transition: 'all 0.2s', opacity: exporting || members.length === 0 ? 0.5 : 1,
+          }}
+        >
+          {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={15} />} Export CSV
+        </button>
       </div>
+
+      {/* Filter rows */}
+      <FilterRow label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={v => { setTypeFilter(v as TypeFilter); setPage(1); }} />
+      <FilterRow label="Payment" options={PAY_FILTERS} value={payFilter} onChange={v => { setPayFilter(v as PayFilter); setPage(1); }} />
+      <FilterRow label="Status" options={STATUS_FILTERS} value={statusFilter} onChange={v => { setStatusFilter(v as StatusFilter); setPage(1); }} />
+      <div style={{ height: '1rem' }} />
 
       {/* Table card */}
       <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid rgba(13,77,124,0.07)', boxShadow: '0 4px 20px rgba(13,77,124,0.05)', overflow: 'hidden' }}>
@@ -295,6 +338,8 @@ export default function MemberList() {
                       </button>
                     </th>
                   ))}
+                  <th style={{ textAlign: 'left', padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-soft)' }}>Type</th>
+                  <th style={{ textAlign: 'left', padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-soft)' }}>Payment</th>
                   <th style={{ textAlign: 'left', padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-soft)' }}>Status</th>
                   <th style={{ textAlign: 'right', padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-soft)' }}>Actions</th>
                 </tr>
@@ -309,6 +354,8 @@ export default function MemberList() {
                     <td style={{ padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--text-mid)' }}>{m.email}</td>
                     <td style={{ padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--text-mid)' }}>{m.city || '—'}</td>
                     <td style={{ padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--text-mid)' }}>{formatDate(m.created_at)}</td>
+                    <td style={{ padding: '0.875rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '13.5px', color: 'var(--text-mid)' }}>{m.membership_type ? m.membership_type.charAt(0).toUpperCase() + m.membership_type.slice(1) : '—'}{m.is_family ? <Heart size={11} style={{ display: 'inline', marginLeft: '4px', color: 'var(--uid-teal)' }} /> : null}</td>
+                    <td style={{ padding: '0.875rem 1rem' }}><PayBadge status={m.payment_status ?? 'pending'} /></td>
                     <td style={{ padding: '0.875rem 1rem' }}><StatusBadge status={m.status} /></td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
@@ -331,7 +378,15 @@ export default function MemberList() {
                       <p style={{ margin: 0, fontFamily: "'DM Sans', sans-serif", fontSize: '14px', fontWeight: 600, color: 'var(--uid-dark)' }}>{fullName(m.first_name, m.last_name)}</p>
                       <p style={{ margin: '2px 0 0', fontFamily: "'DM Sans', sans-serif", fontSize: '12.5px', color: 'var(--text-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</p>
                     </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                     <StatusBadge status={m.status} />
+                    <PayBadge status={m.payment_status ?? 'pending'} />
+                    {m.membership_type && (
+                      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '11px', fontWeight: 600, color: 'var(--text-mid)', padding: '2px 8px', borderRadius: '99px', background: 'rgba(13,77,124,0.06)' }}>
+                        {m.membership_type.charAt(0).toUpperCase() + m.membership_type.slice(1)}{m.is_family ? ' · Family' : ''}
+                      </span>
+                    )}
                   </div>
                   <p style={{ margin: '0 0 0.75rem', fontFamily: "'DM Sans', sans-serif", fontSize: '12px', color: 'var(--text-soft)' }}>{m.city || '—'} · {formatDate(m.created_at)}</p>
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -451,5 +506,62 @@ function PageBtn({ children, disabled, onClick }: { children: React.ReactNode; d
     >
       {children}
     </button>
+  );
+}
+
+// ── Filter row ──
+function FilterRow({ label, options, value, onChange }: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.5rem' }}>
+      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '11px', fontWeight: 600, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.8px', minWidth: '60px' }}>{label}</span>
+      {options.map(f => {
+        const active = value === f.value;
+        return (
+          <button
+            key={f.value}
+            onClick={() => onChange(f.value)}
+            style={{
+              padding: '0.375rem 0.75rem', borderRadius: '99px',
+              border: `1.5px solid ${active ? 'var(--uid-teal)' : 'rgba(13,77,124,0.12)'}`,
+              background: active ? 'rgba(62,200,200,0.10)' : '#fff',
+              color: active ? 'var(--uid-teal-dark)' : 'var(--text-mid)',
+              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontSize: '12px', fontWeight: 600,
+              transition: 'all 0.2s',
+            }}
+          >
+            {f.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Payment status badge ──
+const PAY_COLORS: Record<string, { bg: string; fg: string }> = {
+  active: { bg: 'rgba(5,150,105,0.10)', fg: '#059669' },
+  pending: { bg: 'rgba(180,83,9,0.10)', fg: '#b45309' },
+  failed: { bg: 'rgba(220,38,38,0.10)', fg: '#dc2626' },
+  cancelled: { bg: 'rgba(107,114,128,0.10)', fg: '#6b7280' },
+};
+
+function PayBadge({ status }: { status: PaymentStatus }) {
+  const c = PAY_COLORS[status] ?? PAY_COLORS.pending;
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      padding: '2px 9px', borderRadius: '99px',
+      fontSize: '11px', fontWeight: 600,
+      fontFamily: "'DM Sans', sans-serif",
+      background: c.bg, color: c.fg,
+    }}>
+      {label}
+    </span>
   );
 }

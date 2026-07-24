@@ -5,11 +5,11 @@ import { Link } from 'react-router-dom';
 import { FooterArchBorder } from './BackgroundDecor';
 
 const SOCIAL = [
-  { Icon: Instagram, label: 'https://www.instagram.com/uidtoronto/' },
-  { Icon: Twitter, label: 'Twitter/X' },
-  { Icon: Facebook, label: 'https://www.facebook.com/profile.php?id=61586044043053&locale=he_IL' },
-  { Icon: Youtube, label: 'https://www.youtube.com/@UidToronto' },
-  { Icon: Linkedin, label: 'LinkedIn' },
+  { Icon: Instagram, label: 'Instagram', href: 'https://www.instagram.com/uidtoronto/' },
+  { Icon: Facebook, label: 'Facebook', href: 'https://www.facebook.com/profile.php?id=61586044043053&locale=he_IL' },
+  { Icon: Youtube, label: 'YouTube', href: 'https://www.youtube.com/@UidToronto' },
+  { Icon: Twitter, label: 'X', href: '#' },
+  { Icon: Linkedin, label: 'LinkedIn', href: '#' },
 ];
 
 export default function Footer() {
@@ -52,10 +52,10 @@ export default function Footer() {
               {t.footer.descEn}
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
-              {SOCIAL.map(({ Icon, label }) => (
-                <button key={label} className="social-icon" aria-label={label} style={{ cursor: 'pointer' }}>
+              {SOCIAL.map(({ Icon, label, href }) => (
+                <a key={label} className="social-icon" aria-label={label} href={href} target={href !== '#' ? '_blank' : undefined} rel="noopener noreferrer" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon size={15} />
-                </button>
+                </a>
               ))}
             </div>
           </div>
@@ -85,9 +85,12 @@ export default function Footer() {
             <h4 style={{ fontSize: '11px', letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', fontWeight: 600, marginBottom: '1.25rem' }}>
               {t.footer.contact}
             </h4>
-            {['Toronto, Ontario', 'info@uid-toronto.ca', '+1 (416) 000-0000', lang === 'TR' ? 'Medya İletişimi' : 'Media Inquiries'].map(item => (
-              <p key={item} style={{ fontSize: '14px', color: 'rgba(255,255,255,0.45)', fontWeight: 300, padding: '4px 0', margin: 0, lineHeight: 1.6 }}>{item}</p>
-            ))}
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.45)', fontWeight: 300, padding: '4px 0', margin: 0, lineHeight: 1.6 }}>
+              792 O'Connor Dr Unit A<br />East York, Ontario
+            </p>
+            <a href="mailto:toronto.secretary@u-id.org" style={{ ...linkStyle, display: 'block', fontSize: '14px', paddingTop: '8px' }} onMouseEnter={e => handleHover(e, true)} onMouseLeave={e => handleHover(e, false)}>
+              toronto.secretary@u-id.org
+            </a>
           </div>
         </div>
 
@@ -97,10 +100,10 @@ export default function Footer() {
             {t.footer.copyright}
           </p>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {SOCIAL.map(({ Icon, label }) => (
-              <button key={label} className="social-icon" aria-label={label} style={{ cursor: 'pointer', width: '30px', height: '30px' }}>
+            {SOCIAL.map(({ Icon, label, href }) => (
+              <a key={label} className="social-icon" aria-label={label} href={href} target={href !== '#' ? '_blank' : undefined} rel="noopener noreferrer" style={{ cursor: 'pointer', width: '30px', height: '30px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon size={13} />
-              </button>
+              </a>
             ))}
           </div>
         </div>

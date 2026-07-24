@@ -104,6 +104,7 @@ async function handleEvent(event: Stripe.Event) {
 // ── checkout.session.completed ──
 // Fires when a checkout succeeds. For subscriptions, sync the full
 // subscription state from Stripe. For one-time payments, record the order.
+// Also activates a member record if the session carries member_id metadata.
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
   if (!customerId) {
@@ -113,6 +114,25 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const isSubscription = session.mode === 'subscription';
   console.info(`Processing ${isSubscription ? 'subscription' : 'one-time payment'} checkout for ${customerId}`);
+
+  // ── Membership activation ──
+  // If the checkout session was created from the membership registration flow,
+  // it carries a member_id in metadata. Mark that member active now that payment succeeded.
+  const memberId = session.metadata?.member_id;
+  if (memberId) {
+    const { error: memberErr } = await supabase
+      .from('members')
+      .update({
+        payment_status: 'active',
+        status: 'active',
+        stripe_customer_id: customerId,
+        stripe_session_id: session.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', memberId);
+    if (memberErr) console.error('Failed to activate member:', memberErr);
+    else console.info(`Member ${memberId} activated after checkout.`);
+  }
 
   if (isSubscription) {
     await syncCustomerFromStripe(customerId);

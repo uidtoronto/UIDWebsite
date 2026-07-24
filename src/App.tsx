@@ -12,6 +12,7 @@ import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Membership from './pages/Membership';
+import MembershipRegister from './pages/MembershipRegister';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancelled from './pages/PaymentCancelled';
 import Dashboard from './pages/Dashboard';
@@ -83,6 +84,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/membership" element={<Membership />} />
+      <Route path="/register" element={<MembershipRegister />} />
       <Route path="/payment-success" element={<PaymentSuccess />} />
       <Route path="/payment-cancelled" element={<PaymentCancelled />} />
       <Route path="/pricing" element={<PricingPage />} />

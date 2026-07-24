@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       return corsResponse({ error: 'Method not allowed' }, 405);
     }
 
-    const { price_id, success_url, cancel_url, mode } = await req.json();
+    const { price_id, success_url, cancel_url, mode, member_id } = await req.json();
 
     const error = validateParameters(
       { price_id, success_url, cancel_url, mode },
@@ -190,6 +190,10 @@ Deno.serve(async (req) => {
       mode,
       success_url,
       cancel_url,
+      metadata: {
+        ...(member_id ? { member_id } : {}),
+        user_id: user.id,
+      },
     });
 
     console.log(`Created checkout session ${session.id} for customer ${customerId}`);

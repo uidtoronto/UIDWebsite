@@ -189,6 +189,18 @@ export interface ExecNotification {
 // ───────────────────────────────────────────────────────────
 
 export type MemberStatus = 'active' | 'inactive' | 'pending' | 'suspended';
+export type PaymentStatus = 'pending' | 'active' | 'failed' | 'cancelled';
+export type RegistrationMembershipType = 'adult' | 'student' | 'pensioner';
+
+export interface FamilyMember {
+  id?: string;
+  member_id?: string;
+  full_name: string;
+  age?: number | null;
+  gender?: 'male' | 'female' | null;
+  member_type?: 'adult' | 'child' | null;
+  created_at?: string;
+}
 
 export interface Member {
   id: string;
@@ -199,10 +211,26 @@ export interface Member {
   city?: string | null;
   status: MemberStatus;
   created_at: string;
+  // Extended registration fields
+  birth_date?: string | null;
+  mobile_phone?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  membership_type?: RegistrationMembershipType | null;
+  is_family?: boolean;
+  payment_status?: PaymentStatus;
+  stripe_customer_id?: string | null;
+  stripe_checkout_id?: string | null;
+  stripe_session_id?: string | null;
+  updated_at?: string;
+  family_members?: FamilyMember[];
 }
 
 // Row shape for create/update operations (id + created_at are server-managed)
-export type MemberInput = Omit<Member, 'id' | 'created_at'>;
+export type MemberInput = Omit<Member, 'id' | 'created_at' | 'family_members'>;
 
 export type MemberSortKey = 'name' | 'email' | 'city' | 'created_at';
 
@@ -211,4 +239,21 @@ export type SortDirection = 'asc' | 'desc';
 export interface MemberStats {
   total: number;
   byStatus: { status: MemberStatus; count: number }[];
+}
+
+export interface RegistrationInput {
+  first_name: string;
+  last_name: string;
+  birth_date: string;
+  email: string;
+  mobile_phone: string;
+  address_line1: string;
+  address_line2?: string;
+  city: string;
+  province: string;
+  postal_code: string;
+  country: string;
+  membership_type: RegistrationMembershipType;
+  is_family: boolean;
+  family_members?: FamilyMember[];
 }
