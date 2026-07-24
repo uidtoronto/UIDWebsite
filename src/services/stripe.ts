@@ -14,7 +14,7 @@ export interface PlanInfo {
   savings?: string;
 }
 
-export const PLANS: Record<PlanId, PlanInfo> = {
+export const PLANS: Record<PlanId, PlanInfo & { paymentLinkUrl: string }> = {
   monthly: {
     id: 'monthly',
     name: 'Monthly Membership',
@@ -22,6 +22,7 @@ export const PLANS: Record<PlanId, PlanInfo> = {
     currency: 'CAD',
     interval: 'month',
     description: 'Flexible month-to-month membership.',
+    paymentLinkUrl: 'https://buy.stripe.com/test_eVq28sgth4IYcxgcDEdEs00',
     features: [
       'Official UID Toronto Membership',
       'Access to Member Dashboard',
@@ -34,75 +35,32 @@ export const PLANS: Record<PlanId, PlanInfo> = {
   annual: {
     id: 'annual',
     name: 'Annual Membership',
-    price: 200,
+    price: 240,
     currency: 'CAD',
     interval: 'year',
-    description: 'Best value — save $40 compared to monthly.',
+    description: 'Best value — save $240 compared to monthly.',
+    paymentLinkUrl: 'https://buy.stripe.com/test_28E9AUdh58Ze40KgTUdEs01',
     features: [
       'Everything in Monthly',
-      'Save $40 per year',
+      'Save $240 per year',
       'Priority event registration',
       'Exclusive annual member reception',
       'Free guest pass to one event',
     ],
-    savings: 'Save $40/year',
+    savings: 'Save $240/year',
   },
 };
 
-export interface CheckoutSession {
-  sessionId: string;
-  url: string;
-}
-
-// ── createCheckoutSession ───────────────────────────────────────
-// Calls the `stripe-checkout` Supabase Edge Function which creates a
-// Stripe Checkout Session server-side using STRIPE_SECRET_KEY.
-export async function createCheckoutSession(plan: PlanId): Promise<{ session?: CheckoutSession; error?: string }> {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return { error: 'You must be signed in to continue.' };
-
-    const priceId = plan === 'annual'
-      ? 'price_1TsHPICIqsWOqM1zVMCiDCJZ'
-      : 'price_1TsHOtCIqsWOqM1z3shb8WMU';
-
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          price_id: priceId,
-          mode: 'subscription',
-          success_url: `${window.location.origin}/payment-success`,
-          cancel_url: `${window.location.origin}/pricing`,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      return { error: body?.error || 'Failed to create checkout session' };
-    }
-
-    const data = await response.json();
-    return { session: { sessionId: data.sessionId, url: data.url } };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Checkout failed' };
-  }
-}
-
-// ── redirectToCheckout ────────────────────────────────────────────
-// Redirects the browser to the Stripe-hosted checkout page.
-export async function redirectToCheckout(session: CheckoutSession): Promise<{ error?: string }> {
-  if (session.url) {
-    window.location.href = session.url;
-    return {};
-  }
-  return { error: 'No checkout URL available' };
+// ── redirectToPaymentLink ───────────────────────────────────────
+// Redirects the browser to a Stripe Payment Link — a pre-built hosted
+// checkout page. The "after payment" redirect URL is configured in the
+// Stripe Dashboard for each payment link and should point to:
+//   https://your-domain/payment-success?plan={PLAN_ID}&session_id={CHECKOUT_SESSION_ID}
+export async function redirectToPaymentLink(plan: PlanId): Promise<{ error?: string }> {
+  const planInfo = PLANS[plan];
+  if (!planInfo?.paymentLinkUrl) return { error: 'Invalid plan selected.' };
+  window.location.href = planInfo.paymentLinkUrl;
+  return {};
 }
 
 // ── verifyPayment ────────────────────────────────────────────────

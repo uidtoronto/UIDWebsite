@@ -1,7 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Check, Star } from 'lucide-react';
 import type { StripeProduct } from '../../stripe-config';
-import { useCheckout } from '../../hooks/useCheckout';
+import { useAuth } from '../../context/AuthContext';
 
 interface PricingCardProps {
   product: StripeProduct;
@@ -9,10 +10,21 @@ interface PricingCardProps {
 }
 
 export function PricingCard({ product, isCurrentPlan }: PricingCardProps) {
-  const { startCheckout, loading, error } = useCheckout();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const handleCheckout = () => {
-    startCheckout({ priceId: product.priceId, mode: product.mode });
+    setError(null);
+
+    if (!isAuthenticated) {
+      navigate('/login?redirect=/pricing');
+      return;
+    }
+
+    setLoading(true);
+    window.location.href = product.paymentLinkUrl;
   };
 
   return (

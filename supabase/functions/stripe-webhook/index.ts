@@ -105,6 +105,10 @@ async function handleEvent(event: Stripe.Event) {
 // Fires when a checkout succeeds. For subscriptions, sync the full
 // subscription state from Stripe. For one-time payments, record the order.
 // Also activates a member record if the session carries member_id metadata.
+//
+// For Stripe Payment Links (no prior edge-function checkout), there is no
+// stripe_customers mapping yet — we resolve the Supabase user by the
+// customer email and create the mapping here.
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
   if (!customerId) {
@@ -114,6 +118,72 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const isSubscription = session.mode === 'subscription';
   console.info(`Processing ${isSubscription ? 'subscription' : 'one-time payment'} checkout for ${customerId}`);
+
+  // ── Ensure stripe_customers mapping exists ──
+  // Payment Link checkouts don't go through our edge function, so the
+  // mapping between the Stripe customer and the Supabase user may not
+  // exist yet. Resolve by email and create it if missing.
+  const { data: existingMapping } = await supabase
+    .from('stripe_customers')
+    .select('user_id')
+    .eq('customer_id', customerId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (!existingMapping) {
+    // Get the customer's email from Stripe (Payment Links may not include
+    // it in the session object, so fetch from the customer record).
+    let customerEmail = session.customer_email || session.customer_details?.email;
+    if (!customerEmail) {
+      const customer = await stripe.customers.retrieve(customerId);
+      customerEmail = typeof customer === 'object' && !('deleted' in customer) ? customer.email : null;
+    }
+
+    if (customerEmail) {
+      // Resolve the Supabase user_id by email via the lookup function
+      const { data: userId } = await supabase.rpc('get_user_id_by_email', { p_email: customerEmail });
+
+      if (userId) {
+        // Check if a mapping already exists for this user (different Stripe customer)
+        const { data: userMapping } = await supabase
+          .from('stripe_customers')
+          .select('customer_id')
+          .eq('user_id', userId)
+          .is('deleted_at', null)
+          .maybeSingle();
+
+        if (!userMapping) {
+          const { error: createMappingError } = await supabase.from('stripe_customers').insert({
+            user_id: userId,
+            customer_id: customerId,
+          });
+
+          if (createMappingError) {
+            console.error('Failed to create stripe_customers mapping:', createMappingError);
+          } else {
+            console.info(`Created stripe_customers mapping: user ${userId} → customer ${customerId}`);
+          }
+        } else if (userMapping.customer_id !== customerId) {
+          // User had a different customer ID — update it
+          const { error: updateMappingError } = await supabase
+            .from('stripe_customers')
+            .update({ customer_id: customerId })
+            .eq('user_id', userId)
+            .is('deleted_at', null);
+
+          if (updateMappingError) {
+            console.error('Failed to update stripe_customers mapping:', updateMappingError);
+          } else {
+            console.info(`Updated stripe_customers mapping: user ${userId} → customer ${customerId}`);
+          }
+        }
+      } else {
+        console.info(`No Supabase user found for email ${customerEmail} — skipping customer mapping`);
+      }
+    } else {
+      console.info(`No email available for customer ${customerId} — skipping customer mapping`);
+    }
+  }
 
   // ── Membership activation ──
   // If the checkout session was created from the membership registration flow,

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Check, Sparkles, Calendar, TrendingDown, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { UIDLogo } from '../components/UIDLogo';
-import { PLANS, type PlanId, type PlanInfo, createCheckoutSession, redirectToCheckout } from '../services/stripe';
+import { PLANS, type PlanId, type PlanInfo, redirectToPaymentLink } from '../services/stripe';
 import { useAuth } from '../context/AuthContext';
 
 export default function Membership() {
@@ -19,13 +19,8 @@ export default function Membership() {
 
   const handleSelectPlan = async (planId: PlanId) => {
     setPendingPlan(planId);
-    const { session, error } = await createCheckoutSession(planId);
-    if (error || !session) {
-      setPendingPlan(null);
-      return;
-    }
-    await redirectToCheckout(session);
-    // redirectToCheckout navigates away — if we're still here it failed
+    await redirectToPaymentLink(planId);
+    // redirectToPaymentLink navigates away — if we're still here it failed
     setPendingPlan(null);
   };
 
