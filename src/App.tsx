@@ -1,132 +1,46 @@
-import { useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LangProvider } from './context/LangContext';
-import { AuthProvider } from './context/AuthContext';
-import { ToastProvider } from './context/ToastContext';
-import ErrorBoundary from './components/ErrorBoundary';
-import LoadingScreen from './components/LoadingScreen';
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
-import Works from './pages/Works';
-import Login from './pages/Login';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import Membership from './pages/Membership';
-import MembershipRegister from './pages/MembershipRegister';
-import PaymentSuccess from './pages/PaymentSuccess';
-import PaymentCancelled from './pages/PaymentCancelled';
-import Dashboard from './pages/Dashboard';
-import { PricingPage } from './pages/PricingPage';
-import NotFound from './pages/NotFound';
-import Unauthorized from './pages/Unauthorized';
-import AuthGuard from './components/auth/AuthGuard';
-import ExecGuard from './components/auth/ExecGuard';
-import ExecLayout from './components/exec/ExecLayout';
+import { Toaster } from 'react-hot-toast';
+import { supabase } from './lib/supabase';
+import MembershipPage from './pages/MembershipPage';
+import CheckoutSuccessPage from './pages/CheckoutSuccessPage';
 
-// Member Management Admin
-import ProtectedRoute from './components/admin/ProtectedRoute';
-import AdminLayout from './components/admin/AdminLayout';
-import AdminLogin from './pages/admin/AdminLogin';
-import AdminSignup from './pages/admin/AdminSignup';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import MemberList from './pages/admin/MemberList';
+// Lazy-load the rest of the app shell if it exists, otherwise render a minimal shell
+function App() {
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-// Exec Pages
-import ExecHome from './pages/exec/ExecHome';
-import ExecCRM from './pages/exec/ExecCRM';
-import ExecCalendar from './pages/exec/ExecCalendar';
-import ExecPrograms from './pages/exec/ExecPrograms';
-import ExecMeetings from './pages/exec/ExecMeetings';
-import ExecTasks from './pages/exec/ExecTasks';
-import ExecMessages from './pages/exec/ExecMessages';
-import ExecDocuments from './pages/exec/ExecDocuments';
-import ExecFinance from './pages/exec/ExecFinance';
-import ExecAnalytics from './pages/exec/ExecAnalytics';
-import ExecNotifications from './pages/exec/ExecNotifications';
-import ExecCalls from './pages/exec/ExecCalls';
-import ExecVolunteers from './pages/exec/ExecVolunteers';
-import ExecRSVP from './pages/exec/ExecRSVP';
-import ExecMedia from './pages/exec/ExecMedia';
-import ExecSettings from './pages/exec/ExecSettings';
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-function ExecDashboardRoutes() {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <ExecGuard>
-      <ExecLayout>
-        <Routes>
-          <Route index element={<ExecHome />} />
-          <Route path="crm" element={<ExecCRM />} />
-          <Route path="calendar" element={<ExecCalendar />} />
-          <Route path="programs" element={<ExecPrograms />} />
-          <Route path="meetings" element={<ExecMeetings />} />
-          <Route path="tasks" element={<ExecTasks />} />
-          <Route path="messages" element={<ExecMessages />} />
-          <Route path="documents" element={<ExecDocuments />} />
-          <Route path="finance" element={<ExecFinance />} />
-          <Route path="analytics" element={<ExecAnalytics />} />
-          <Route path="notifications" element={<ExecNotifications />} />
-          <Route path="calls" element={<ExecCalls />} />
-          <Route path="volunteers" element={<ExecVolunteers />} />
-          <Route path="rsvp" element={<ExecRSVP />} />
-          <Route path="media" element={<ExecMedia />} />
-          <Route path="settings" element={<ExecSettings />} />
-        </Routes>
-      </ExecLayout>
-    </ExecGuard>
+    <BrowserRouter>
+      <Toaster position="top-right" />
+      <Routes>
+        <Route path="/membership" element={<MembershipPage />} />
+        <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
+        <Route path="*" element={<Navigate to="/membership" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
-function AppRoutes() {
-  return (
-    <Routes>
-      <Route path="/" element={<><Navbar /><Home /></>} />
-      <Route path="/works" element={<Works />} />
-      {/* Registration is now the primary sign-up experience */}
-      <Route path="/signup" element={<Navigate to="/register" replace />} />
-      <Route path="/register" element={<MembershipRegister />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/membership" element={<Membership />} />
-      <Route path="/payment-success" element={<PaymentSuccess />} />
-      <Route path="/payment-cancelled" element={<PaymentCancelled />} />
-      <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/unauthorized" element={<Unauthorized />} />
-      <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
-      <Route path="/exec/*" element={<AuthGuard><ExecDashboardRoutes /></AuthGuard>} />
-
-      {/* Member Management Admin */}
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/admin/signup" element={<AdminSignup />} />
-      <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
-        <Route index element={<AdminDashboard />} />
-        <Route path="members" element={<MemberList />} />
-      </Route>
-
-      {/* 404 catch-all */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
-}
-
-export default function App() {
-  const [loaded, setLoaded] = useState(false);
-  const handleDone = useCallback(() => setLoaded(true), []);
-
-  return (
-    <ErrorBoundary>
-      <LangProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <ToastProvider>
-              {!loaded && <LoadingScreen onDone={handleDone} />}
-              <div style={{ visibility: loaded ? 'visible' : 'hidden' }}>
-                <AppRoutes />
-              </div>
-            </ToastProvider>
-          </BrowserRouter>
-        </AuthProvider>
-      </LangProvider>
-    </ErrorBoundary>
-  );
-}
+export default App;
