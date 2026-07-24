@@ -7,6 +7,7 @@ export interface StripeProduct {
   currency: string;
   currencySymbol: string;
   mode: 'subscription' | 'payment';
+  interval?: 'month' | 'year';
 }
 
 export const STRIPE_PRODUCTS: StripeProduct[] = [
@@ -19,6 +20,7 @@ export const STRIPE_PRODUCTS: StripeProduct[] = [
     currency: 'cad',
     currencySymbol: 'C$',
     mode: 'subscription',
+    interval: 'year',
   },
   {
     id: 'prod_Ut6W4153T8CLbe',
@@ -29,5 +31,10 @@ export const STRIPE_PRODUCTS: StripeProduct[] = [
     currency: 'cad',
     currencySymbol: 'C$',
     mode: 'subscription',
+    interval: 'month',
   },
 ];
+
+export function getProductByPriceId(priceId: string): StripeProduct | undefined {
+  return STRIPE_PRODUCTS.find((p) => p.priceId === priceId);
+}

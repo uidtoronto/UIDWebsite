@@ -1,54 +1,64 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { STRIPE_PRODUCTS } from '../stripe-config';
+import { getProductByPriceId, StripeProduct } from '../stripe-config';
 
-export interface SubscriptionInfo {
-  status: string | null;
-  priceId: string | null;
-  planName: string | null;
-  isActive: boolean;
+export interface SubscriptionState {
+  loading: boolean;
+  subscription: {
+    status: string;
+    priceId: string | null;
+    product: StripeProduct | null;
+  } | null;
+  error: string | null;
 }
 
-export function useSubscription() {
-  const [subscription, setSubscription] = useState<SubscriptionInfo>({
-    status: null,
-    priceId: null,
-    planName: null,
-    isActive: false,
+export function useSubscription(userId: string | undefined) {
+  const [state, setState] = useState<SubscriptionState>({
+    loading: true,
+    subscription: null,
+    error: null,
   });
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchSubscription();
-  }, []);
-
-  async function fetchSubscription() {
-    try {
-      const { data, error } = await supabase
-        .from('stripe_user_subscriptions')
-        .select('*')
-        .maybeSingle();
-
-      if (error || !data) {
-        setSubscription({ status: null, priceId: null, planName: null, isActive: false });
-        return;
-      }
-
-      const product = STRIPE_PRODUCTS.find(p => p.priceId === data.price_id);
-      const isActive = data.subscription_status === 'active' || data.subscription_status === 'trialing';
-
-      setSubscription({
-        status: data.subscription_status,
-        priceId: data.price_id,
-        planName: product?.name ?? null,
-        isActive,
-      });
-    } catch {
-      setSubscription({ status: null, priceId: null, planName: null, isActive: false });
-    } finally {
-      setLoading(false);
+    if (!userId) {
+      setState({ loading: false, subscription: null, error: null });
+      return;
     }
-  }
 
-  return { subscription, loading, refetch: fetchSubscription };
+    async function fetchSubscription() {
+      try {
+        const { data, error } = await supabase
+          .from('stripe_user_subscriptions')
+          .select('subscription_status, price_id')
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data && data.subscription_status === 'active') {
+          const product = data.price_id ? getProductByPriceId(data.price_id) : null;
+          setState({
+            loading: false,
+            subscription: {
+              status: data.subscription_status,
+              priceId: data.price_id,
+              product: product ?? null,
+            },
+            error: null,
+          });
+        } else {
+          setState({ loading: false, subscription: null, error: null });
+        }
+      } catch (err) {
+        setState({
+          loading: false,
+          subscription: null,
+          error: err instanceof Error ? err.message : 'Failed to load subscription',
+        });
+      }
+    }
+
+    fetchSubscription();
+  }, [userId]);
+
+  return state;
 }
