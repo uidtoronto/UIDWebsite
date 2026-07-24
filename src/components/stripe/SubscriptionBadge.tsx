@@ -1,3 +1,4 @@
+import React from 'react';
 import { CreditCard, Loader2 } from 'lucide-react';
 import { useSubscription } from '../../hooks/useSubscription';
 

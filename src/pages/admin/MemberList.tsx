@@ -47,8 +47,6 @@ const SORT_COLUMNS: { key: MemberSortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'email', label: 'Email' },
   { key: 'city', label: 'City' },
-  { key: 'membership_type', label: 'Type' },
-  { key: 'status', label: 'Status' },
   { key: 'created_at', label: 'Joined' },
 ];
 

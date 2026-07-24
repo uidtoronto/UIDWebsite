@@ -17,7 +17,7 @@ export function useCheckout() {
   const startCheckout = async ({
     priceId,
     mode,
-    successPath = '/dashboard',
+    successPath = '/payment-success',
     cancelPath = '/pricing',
   }: CheckoutOptions) => {
     setLoading(true);

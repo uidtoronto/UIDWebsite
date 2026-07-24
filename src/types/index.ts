@@ -232,16 +232,13 @@ export interface Member {
 // Row shape for create/update operations (id + created_at are server-managed)
 export type MemberInput = Omit<Member, 'id' | 'created_at' | 'family_members'>;
 
-export type MemberSortKey = 'name' | 'email' | 'city' | 'membership_type' | 'status' | 'created_at';
+export type MemberSortKey = 'name' | 'email' | 'city' | 'created_at';
 
 export type SortDirection = 'asc' | 'desc';
 
 export interface MemberStats {
   total: number;
   byStatus: { status: MemberStatus; count: number }[];
-  byMembershipType: { type: RegistrationMembershipType; count: number }[];
-  byPaymentStatus: { status: PaymentStatus; count: number }[];
-  activeSubscriptions: number;
 }
 
 export interface RegistrationInput {

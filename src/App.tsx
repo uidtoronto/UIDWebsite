@@ -1,14 +1,14 @@
 import { useState, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LangProvider } from './context/LangContext';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import ErrorBoundary from './components/ErrorBoundary';
 import LoadingScreen from './components/LoadingScreen';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Works from './pages/Works';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Membership from './pages/Membership';
@@ -17,8 +17,6 @@ import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancelled from './pages/PaymentCancelled';
 import Dashboard from './pages/Dashboard';
 import { PricingPage } from './pages/PricingPage';
-import NotFound from './pages/NotFound';
-import Unauthorized from './pages/Unauthorized';
 import AuthGuard from './components/auth/AuthGuard';
 import ExecGuard from './components/auth/ExecGuard';
 import ExecLayout from './components/exec/ExecLayout';
@@ -81,17 +79,15 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<><Navbar /><Home /></>} />
       <Route path="/works" element={<Works />} />
-      {/* Registration is now the primary sign-up experience */}
-      <Route path="/signup" element={<Navigate to="/register" replace />} />
-      <Route path="/register" element={<MembershipRegister />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/membership" element={<Membership />} />
+      <Route path="/register" element={<MembershipRegister />} />
       <Route path="/payment-success" element={<PaymentSuccess />} />
       <Route path="/payment-cancelled" element={<PaymentCancelled />} />
       <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/unauthorized" element={<Unauthorized />} />
       <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
       <Route path="/exec/*" element={<AuthGuard><ExecDashboardRoutes /></AuthGuard>} />
 
@@ -102,9 +98,6 @@ function AppRoutes() {
         <Route index element={<AdminDashboard />} />
         <Route path="members" element={<MemberList />} />
       </Route>
-
-      {/* 404 catch-all */}
-      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
@@ -114,19 +107,17 @@ export default function App() {
   const handleDone = useCallback(() => setLoaded(true), []);
 
   return (
-    <ErrorBoundary>
-      <LangProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <ToastProvider>
-              {!loaded && <LoadingScreen onDone={handleDone} />}
-              <div style={{ visibility: loaded ? 'visible' : 'hidden' }}>
-                <AppRoutes />
-              </div>
-            </ToastProvider>
-          </BrowserRouter>
-        </AuthProvider>
-      </LangProvider>
-    </ErrorBoundary>
+    <LangProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <ToastProvider>
+            {!loaded && <LoadingScreen onDone={handleDone} />}
+            <div style={{ visibility: loaded ? 'visible' : 'hidden' }}>
+              <AppRoutes />
+            </div>
+          </ToastProvider>
+        </BrowserRouter>
+      </AuthProvider>
+    </LangProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { CheckCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { useSubscription } from '../hooks/useSubscription';
 

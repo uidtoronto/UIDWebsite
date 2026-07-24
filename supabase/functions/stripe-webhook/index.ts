@@ -221,31 +221,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 }
 
-// Sync subscription fields onto the `members` row matching the Stripe customer.
-// Keeps members.subscription_status / subscription_plan / renewal_date /
-// stripe_subscription_id aligned with the Stripe source of truth.
-async function syncMemberSubscription(customerId: string, subscription: Stripe.Subscription) {
-  const interval = subscription.items.data[0]?.price.recurring?.interval ?? null;
-  const planLabel = interval === 'year' ? 'annual' : interval === 'month' ? 'monthly' : 'unknown';
-  const renewalDate = subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000).toISOString()
-    : null;
-
-  const { error } = await supabase
-    .from('members')
-    .update({
-      stripe_customer_id: customerId,
-      stripe_subscription_id: subscription.id,
-      subscription_plan: planLabel,
-      subscription_status: subscription.status,
-      renewal_date: renewalDate,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('stripe_customer_id', customerId);
-
-  if (error) console.error(`Failed to sync member subscription for ${customerId}:`, error);
-}
-
 // ── customer.subscription.updated ──
 // Fires on plan changes, status transitions, etc. Re-sync from Stripe.
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
@@ -355,8 +330,6 @@ async function syncCustomerFromStripe(customerId: string) {
       console.error('Error syncing subscription:', error);
       throw new Error('Failed to sync subscription in database');
     }
-    // Mirror subscription state onto the members row for this customer
-    await syncMemberSubscription(customerId, subscription);
     console.info(`Successfully synced subscription for customer: ${customerId}`);
   } catch (error) {
     console.error(`Failed to sync subscription for customer ${customerId}:`, error);
