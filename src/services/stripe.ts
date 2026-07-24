@@ -1,12 +1,74 @@
 import { supabase } from '../lib/supabase';
 import type { MembershipType } from '../types';
 
+export type PlanId = 'monthly' | 'annual';
+
+export interface PlanInfo {
+  id: PlanId;
+  name: string;
+  price: number;
+  currency: string;
+  interval: 'month' | 'year';
+  description: string;
+  features: string[];
+  savings?: string;
+}
+
+export const PLANS: Record<PlanId, PlanInfo & { paymentLinkUrl: string }> = {
+  monthly: {
+    id: 'monthly',
+    name: 'Monthly Membership',
+    price: 20,
+    currency: 'CAD',
+    interval: 'month',
+    description: 'Flexible month-to-month membership.',
+    paymentLinkUrl: 'https://buy.stripe.com/test_eVq28sgth4IYcxgcDEdEs00',
+    features: [
+      'Official UID Toronto Membership',
+      'Access to Member Dashboard',
+      'Member-only Events',
+      'Partner Discounts',
+      'Community Programs',
+      'Networking Opportunities',
+    ],
+  },
+  annual: {
+    id: 'annual',
+    name: 'Annual Membership',
+    price: 240,
+    currency: 'CAD',
+    interval: 'year',
+    description: 'Best value — save $240 compared to monthly.',
+    paymentLinkUrl: 'https://buy.stripe.com/test_28E9AUdh58Ze40KgTUdEs01',
+    features: [
+      'Everything in Monthly',
+      'Save $240 per year',
+      'Priority event registration',
+      'Exclusive annual member reception',
+      'Free guest pass to one event',
+    ],
+    savings: 'Save $240/year',
+  },
+};
+
+// ── redirectToPaymentLink ───────────────────────────────────────
+// Redirects the browser to a Stripe Payment Link — a pre-built hosted
+// checkout page. The "after payment" redirect URL is configured in the
+// Stripe Dashboard for each payment link and should point to:
+//   https://your-domain/payment-success?plan={PLAN_ID}&session_id={CHECKOUT_SESSION_ID}
+export async function redirectToPaymentLink(plan: PlanId): Promise<{ error?: string }> {
+  const planInfo = PLANS[plan];
+  if (!planInfo?.paymentLinkUrl) return { error: 'Invalid plan selected.' };
+  window.location.href = planInfo.paymentLinkUrl;
+  return {};
+}
+
 // ── verifyPayment ────────────────────────────────────────────────
-// Polls the `stripe_user_subscriptions` view (kept in sync by the
-// webhook) to confirm the subscription is active. Called from the
-// PaymentSuccess page after the embedded checkout completes.
+// After returning from Stripe, polls the `stripe_user_subscriptions`
+// view (kept in sync by the webhook) to confirm the subscription is active.
 export async function verifyPayment(_sessionId: string): Promise<{ paid: boolean; error?: string }> {
   try {
+    // Poll a few times — the webhook may take a moment to process
     for (let attempt = 0; attempt < 6; attempt++) {
       const { data, error } = await supabase
         .from('stripe_user_subscriptions')
@@ -31,7 +93,7 @@ export async function verifyPayment(_sessionId: string): Promise<{ paid: boolean
 // The webhook is the source of truth for subscription state. This
 // client helper updates the user's auth metadata so the UI unlocks
 // immediately after the webhook confirms the subscription.
-export async function activateMembership(plan: 'monthly' | 'annual'): Promise<{ membershipType?: MembershipType; error?: string }> {
+export async function activateMembership(plan: PlanId): Promise<{ membershipType?: MembershipType; error?: string }> {
   try {
     const renewalDate = plan === 'annual'
       ? new Date(Date.now() + 365 * 864e5).toISOString()
@@ -49,32 +111,5 @@ export async function activateMembership(plan: 'monthly' | 'annual'): Promise<{ 
     return { membershipType: 'individual' };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Activation failed' };
-  }
-}
-
-// ── getSessionStatus ──────────────────────────────────────────────
-// Polls a Stripe Checkout Session's status via the edge function.
-// Used by the embedded checkout flow to detect completion.
-export async function getSessionStatus(sessionId: string): Promise<{ status: string | null; error?: string }> {
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (sessionData?.session?.access_token) {
-      headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
-    }
-
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout?session_id=${sessionId}`,
-      { headers },
-    );
-
-    if (!response.ok) {
-      return { status: null, error: 'Failed to fetch session status' };
-    }
-
-    const { status } = await response.json();
-    return { status: status ?? null };
-  } catch (e) {
-    return { status: null, error: e instanceof Error ? e.message : 'Status check failed' };
   }
 }

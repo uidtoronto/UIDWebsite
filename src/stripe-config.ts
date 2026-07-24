@@ -1,37 +1,54 @@
 export interface StripeProduct {
   id: string;
-  priceId: string;
   name: string;
   description: string;
   price: number;
-  currency: string;
   currencySymbol: string;
   mode: 'subscription' | 'payment';
-  interval?: 'month' | 'year';
+  interval: 'month' | 'year';
+  features: string[];
+  popular?: boolean;
+  /** Stripe Payment Link URL — a hosted checkout page. */
+  paymentLinkUrl: string;
+  /** Price ID from Stripe, used to match webhook subscription events. */
+  priceId: string;
 }
 
 export const STRIPE_PRODUCTS: StripeProduct[] = [
   {
-    id: 'prod_Ut6XpPqYZD0iFn',
-    priceId: 'price_1TtKKIKTV886CoUJfeMOF027',
-    name: 'UID Toronto Annual Membership',
-    description: 'Become an annual member of the Union of International Democrats Toronto with uninterrupted access to all member benefits.',
-    price: 240.00,
-    currency: 'cad',
-    currencySymbol: 'C$',
-    mode: 'subscription',
-    interval: 'year',
-  },
-  {
-    id: 'prod_Ut6W4153T8CLbe',
-    priceId: 'price_1TtKJ2KTV886CoUJFX8xT41o',
-    name: 'UID Toronto Monthly Membership',
-    description: 'Flexible monthly membership with full access to all UID Toronto member benefits.',
+    id: 'monthly',
+    name: 'Monthly Membership',
+    description: 'Flexible monthly membership with full access to all UID benefits and community resources.',
     price: 20.00,
-    currency: 'cad',
     currencySymbol: 'C$',
     mode: 'subscription',
     interval: 'month',
+    paymentLinkUrl: 'https://buy.stripe.com/test_eVq28sgth4IYcxgcDEdEs00',
+    priceId: 'price_1TsHOtCIqsWOqM1z3shb8WMU',
+    features: [
+      'Full UID membership access',
+      'Community resources & network',
+      'Event discounts & early access',
+      'Cancel anytime',
+    ],
+  },
+  {
+    id: 'annual',
+    name: 'Annual Membership',
+    description: 'Best value — commit annually and unlock the full UID experience with exclusive perks.',
+    price: 240.00,
+    currencySymbol: 'C$',
+    mode: 'subscription',
+    interval: 'year',
+    popular: true,
+    paymentLinkUrl: 'https://buy.stripe.com/test_28E9AUdh58Ze40KgTUdEs01',
+    priceId: 'price_1TsHPICIqsWOqM1zVMCiDCJZ',
+    features: [
+      'Everything in Monthly',
+      'Priority member support',
+      'Exclusive annual member benefits',
+      'Save vs. monthly billing',
+    ],
   },
 ];
 
