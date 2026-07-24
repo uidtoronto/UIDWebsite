@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, LayoutDashboard, Loader2, AlertCircle } from 'lucide-react';
 import { UIDLogo } from '../components/UIDLogo';
-import { verifyPayment, activateMembership, type PlanId } from '../services/stripe';
+import { verifyPayment, activateMembership } from '../services/stripe';
 import { useAuth } from '../context/AuthContext';
 
 type Status = 'verifying' | 'success' | 'failed';
@@ -13,7 +13,7 @@ export default function PaymentSuccess() {
   const navigate = useNavigate();
   const { user, updateProfile } = useAuth();
   const sessionId = params.get('session_id') || '';
-  const plan = (params.get('plan') as PlanId) || 'monthly';
+  const plan = (params.get('plan') as 'monthly' | 'annual') || 'monthly';
   const [status, setStatus] = useState<Status>('verifying');
   const [message, setMessage] = useState('Confirming your payment with our secure server…');
 

@@ -11,7 +11,17 @@ import {
 import { UIDLogo } from '../components/UIDLogo';
 import { useToast } from '../context/ToastContext';
 import { saveRegistration } from '../services/registration';
-import { supabase } from '../lib/supabase';
+import { useCheckout } from '../hooks/useCheckout';
+import { EmbeddedCheckout } from '../components/stripe/EmbeddedCheckout';
+import { STRIPE_PRODUCTS } from '../stripe-config';
+
+// Map membership_type → Stripe price ID. 'student' and 'adult' use
+// the monthly price; 'pensioner' uses the annual price as a discount.
+const PRICE_ID_BY_TYPE: Record<string, string> = {
+  adult: STRIPE_PRODUCTS.find((p) => p.id === 'monthly')!.priceId,
+  student: STRIPE_PRODUCTS.find((p) => p.id === 'monthly')!.priceId,
+  pensioner: STRIPE_PRODUCTS.find((p) => p.id === 'annual')!.priceId,
+};
 
 const familyMemberSchema = z.object({
   full_name: z.string().min(1, 'Required'),
@@ -55,6 +65,8 @@ export default function MembershipRegister() {
     { full_name: '', age: undefined, gender: undefined, member_type: undefined },
   ]);
   const [submitting, setSubmitting] = useState(false);
+  const [checkoutSecret, setCheckoutSecret] = useState<string | null>(null);
+  const { startCheckout } = useCheckout();
 
   const {
     register,
@@ -103,54 +115,7 @@ export default function MembershipRegister() {
     });
   };
 
-  // Create a Stripe Checkout session by calling the edge function directly,
-  // then redirect the browser to the Stripe-hosted page.
-  const startStripeCheckout = async (memberId: string, membershipType: string) => {
-    const successUrl = `${window.location.origin}/payment-success?member=${memberId}`;
-    const cancelUrl = `${window.location.origin}/pricing?member=${memberId}`;
-    // Per spec the post-payment destination is /dashboard; the success page
-    // verifies payment then redirects there. Cancel returns to /pricing.
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (sessionData.session?.access_token) {
-      headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
-    }
-
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          price_id: membershipType === 'student'
-            ? 'price_1TsHOtCIqsWOqM1z3shb8WMU'
-            : membershipType === 'pensioner'
-              ? 'price_1TsHPICIqsWOqM1zVMCiDCJZ'
-              : 'price_1TsHOtCIqsWOqM1z3shb8WMU',
-          mode: 'subscription',
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-          member_id: memberId,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body?.error || 'Checkout setup failed. Please try again.');
-    }
-
-    const { url } = await response.json();
-    if (url) {
-      window.location.href = url;
-    } else {
-      throw new Error('No checkout URL returned.');
-    }
-  };
-
   const onSubmit = async (values: RegistrationForm) => {
-    // Validate family members if family registration is on
     if (isFamily) {
       const validMembers = familyMembers.filter(fm => fm.full_name.trim() !== '');
       if (validMembers.length === 0) {
@@ -190,20 +155,40 @@ export default function MembershipRegister() {
         return;
       }
 
-      toast('Registration saved — redirecting to secure payment…', 'success');
+      toast('Registration saved — loading secure checkout…', 'success');
 
-      // Try to redirect to Stripe Checkout; if it fails, send to pricing page
-      try {
-        await startStripeCheckout(regRes.data!.memberId, values.membership_type);
-      } catch (checkoutErr) {
-        // Registration succeeded but checkout failed — guide user to pricing
+      // Create an Embedded Checkout Session (no redirect).
+      const priceId = PRICE_ID_BY_TYPE[values.membership_type] ?? PRICE_ID_BY_TYPE.adult;
+      const result = await startCheckout({
+        priceId,
+        mode: 'subscription',
+        returnUrl: `${window.location.origin}/payment-success?member=${regRes.data!.memberId}`,
+        memberId: regRes.data!.memberId,
+      });
+
+      if (!result) {
+        // Checkout setup failed — guide user to pricing page as fallback
         navigate('/pricing');
-        toast(checkoutErr instanceof Error ? checkoutErr.message : 'Redirecting to payment options.', 'info');
+        return;
       }
+
+      // Show the embedded checkout overlay
+      setCheckoutSecret(result.clientSecret);
+      setSubmitting(false);
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Something went wrong. Please try again.', 'error');
       setSubmitting(false);
     }
+  };
+
+  const handleCheckoutComplete = () => {
+    setCheckoutSecret(null);
+    navigate('/dashboard');
+  };
+
+  const handleCheckoutClose = () => {
+    setCheckoutSecret(null);
+    toast('Checkout cancelled. You can complete payment from the pricing page.', 'info');
   };
 
   return (
@@ -272,6 +257,13 @@ export default function MembershipRegister() {
               padding: '2.5rem',
             }}
           >
+          {checkoutSecret && (
+            <EmbeddedCheckout
+              clientSecret={checkoutSecret}
+              onClose={handleCheckoutClose}
+              onComplete={handleCheckoutComplete}
+            />
+          )}
             {/* ── Personal Information ── */}
             <SectionTitle icon={<UserPlus size={18} />} title="Personal Information" />
             <div className="reg-grid">
