@@ -1,4 +1,3 @@
-import React from 'react';
 import { CreditCard, ShieldCheck, RefreshCcw } from 'lucide-react';
 import { STRIPE_PRODUCTS } from '../stripe-config';
 import { PricingCard } from '../components/stripe/PricingCard';

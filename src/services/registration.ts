@@ -3,14 +3,40 @@ import type { RegistrationInput, FamilyMember } from '../types';
 
 export interface SavedRegistration {
   memberId: string;
+  authUserId: string;
 }
 
-// Inserts a member row + any family_member rows in a single transaction-like flow.
-// Returns the new member id so the caller can pass it to Stripe checkout metadata.
+// Full registration flow:
+//   1. Create the Supabase auth user (email + password).
+//   2. Insert the member profile row linked by auth_user_id.
+//   3. Insert any family member rows.
+//   4. Update the new member's status to pending + auth metadata.
+// Returns the new member id so the caller can pass it to Stripe checkout.
 export async function saveRegistration(
-  input: RegistrationInput,
+  input: RegistrationInput & { password: string },
 ): Promise<{ data: SavedRegistration | null; error: string | null }> {
+  // ── 1. Create auth user ──
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email: input.email,
+    password: input.password,
+    options: {
+      data: {
+        first_name: input.first_name,
+        last_name: input.last_name,
+        membership_status: 'pending',
+        membership_type: 'individual',
+      },
+    },
+  });
+
+  if (authError) return { data: null, error: authError.message };
+  if (!authData.user) return { data: null, error: 'Failed to create account' };
+
+  const authUserId = authData.user.id;
+
+  // ── 2. Insert member profile linked to the auth user ──
   const memberRow = {
+    auth_user_id: authUserId,
     first_name: input.first_name,
     last_name: input.last_name,
     email: input.email,
@@ -37,7 +63,7 @@ export async function saveRegistration(
   if (memberError) return { data: null, error: memberError.message };
   if (!member) return { data: null, error: 'Failed to create member record' };
 
-  // Insert family members if any
+  // ── 3. Insert family members if any ──
   if (input.is_family && input.family_members && input.family_members.length > 0) {
     const rows: FamilyMember[] = input.family_members
       .filter(fm => fm.full_name.trim() !== '')
@@ -58,5 +84,5 @@ export async function saveRegistration(
     }
   }
 
-  return { data: { memberId: member.id }, error: null };
+  return { data: { memberId: member.id, authUserId }, error: null };
 }

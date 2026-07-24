@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ArrowLeft, ArrowRight, UserPlus, Loader2, CheckCircle2,
-  Users, Heart, ShieldCheck, CreditCard, X,
+  Users, Heart, ShieldCheck, CreditCard, X, Lock,
 } from 'lucide-react';
 import { UIDLogo } from '../components/UIDLogo';
 import { useToast } from '../context/ToastContext';
@@ -26,6 +26,8 @@ const registrationSchema = z.object({
   birth_date: z.string().min(1, 'Birthdate is required'),
   email: z.string().email('Enter a valid email'),
   mobile_phone: z.string().min(7, 'Enter a valid phone number'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  confirmPassword: z.string().min(1, 'Please confirm your password'),
   address_line1: z.string().min(1, 'Street address is required'),
   address_line2: z.string().optional(),
   city: z.string().min(1, 'City is required'),
@@ -34,6 +36,9 @@ const registrationSchema = z.object({
   country: z.string().min(1, 'Country is required'),
   membership_type: z.enum(['adult', 'student', 'pensioner']),
   is_family: z.boolean(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
 });
 
 type RegistrationForm = z.infer<typeof registrationSchema>;
@@ -54,6 +59,7 @@ export default function MembershipRegister() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegistrationForm>({
     resolver: zodResolver(registrationSchema),
@@ -63,6 +69,8 @@ export default function MembershipRegister() {
       birth_date: '',
       email: '',
       mobile_phone: '',
+      password: '',
+      confirmPassword: '',
       address_line1: '',
       address_line2: '',
       city: '',
@@ -73,6 +81,8 @@ export default function MembershipRegister() {
       is_family: false,
     },
   });
+
+  const membershipTypeValue = watch('membership_type');
 
   const updateFamilyMember = (index: number, field: keyof FamilyMemberForm, value: string | number) => {
     setFamilyMembers(prev =>
@@ -97,7 +107,9 @@ export default function MembershipRegister() {
   // then redirect the browser to the Stripe-hosted page.
   const startStripeCheckout = async (memberId: string, membershipType: string) => {
     const successUrl = `${window.location.origin}/payment-success?member=${memberId}`;
-    const cancelUrl = `${window.location.origin}/payment-cancelled?member=${memberId}`;
+    const cancelUrl = `${window.location.origin}/pricing?member=${memberId}`;
+    // Per spec the post-payment destination is /dashboard; the success page
+    // verifies payment then redirects there. Cancel returns to /pricing.
 
     const { data: sessionData } = await supabase.auth.getSession();
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -160,6 +172,7 @@ export default function MembershipRegister() {
         birth_date: values.birth_date,
         email: values.email,
         mobile_phone: values.mobile_phone,
+        password: values.password,
         address_line1: values.address_line1,
         address_line2: values.address_line2,
         city: values.city,
@@ -271,14 +284,28 @@ export default function MembershipRegister() {
               <Field label="Birthdate" error={errors.birth_date?.message} required>
                 <input type="date" {...register('birth_date')} className="reg-input" />
               </Field>
-              <Field label="Membership Type" error={errors.membership_type?.message} required>
-                <select {...register('membership_type')} className="reg-input">
-                  <option value="adult">Adult</option>
-                  <option value="student">Student</option>
-                  <option value="pensioner">Pensioner</option>
-                </select>
-              </Field>
             </div>
+
+            {/* ── Membership Type ── */}
+            <SectionTitle icon={<Heart size={18} />} title="Membership Type" />
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              {(['adult', 'student', 'pensioner'] as const).map(type => (
+                <label key={type} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                  padding: '0.625rem 1rem', borderRadius: '99px',
+                  border: `1.5px solid ${membershipTypeValue === type ? 'var(--uid-teal)' : 'rgba(13,77,124,0.15)'}`,
+                  background: membershipTypeValue === type ? 'rgba(62,200,200,0.10)' : '#fff',
+                  fontFamily: "'DM Sans', sans-serif", fontSize: '13px', fontWeight: 600,
+                  color: membershipTypeValue === type ? 'var(--uid-teal-dark)' : 'var(--text-mid)',
+                }}>
+                  <input type="radio" value={type} {...register('membership_type')} style={{ accentColor: 'var(--uid-teal)' }} />
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </label>
+              ))}
+            </div>
+            {errors.membership_type?.message && (
+              <p style={{ margin: '4px 0 0', fontFamily: "'DM Sans', sans-serif", fontSize: '12px', color: '#dc2626' }}>{errors.membership_type.message}</p>
+            )}
 
             {/* ── Contact ── */}
             <SectionTitle icon={<Users size={18} />} title="Contact" />
@@ -290,6 +317,20 @@ export default function MembershipRegister() {
                 <input {...register('mobile_phone')} className="reg-input" placeholder="+1 (416) 555-0100" />
               </Field>
             </div>
+
+            {/* ── Account ── */}
+            <SectionTitle icon={<Lock size={18} />} title="Account" />
+            <div className="reg-grid">
+              <Field label="Password" error={errors.password?.message} required>
+                <input type="password" {...register('password')} className="reg-input" placeholder="Min. 6 characters" autoComplete="new-password" />
+              </Field>
+              <Field label="Confirm Password" error={errors.confirmPassword?.message} required>
+                <input type="password" {...register('confirmPassword')} className="reg-input" placeholder="Re-enter password" autoComplete="new-password" />
+              </Field>
+            </div>
+            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '12px', color: 'var(--text-soft)', fontWeight: 300, margin: '0 0 0.5rem' }}>
+              Minimum 6 characters — no special characters required.
+            </p>
 
             {/* ── Address ── */}
             <SectionTitle icon={<CreditCard size={18} />} title="Mailing Address" />

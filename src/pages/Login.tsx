@@ -34,7 +34,7 @@ export default function Login() {
     <AuthLayout
       title="Welcome Back"
       subtitle="Sign in to access your UID Toronto member dashboard."
-      footer={<>Don't have an account? <Link to="/signup" style={{ color: 'var(--uid-teal-dark)', fontWeight: 500, textDecoration: 'none' }}>Create one</Link></>}
+      footer={<>Don't have an account? <Link to="/register" style={{ color: 'var(--uid-teal-dark)', fontWeight: 500, textDecoration: 'none' }}>Become a member</Link></>}
     >
       <form onSubmit={handleSubmit} noValidate>
         {displayError && (

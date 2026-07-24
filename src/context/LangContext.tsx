@@ -267,7 +267,7 @@ const translations = {
   },
 } as const;
 
-type Translations = typeof translations.TR;
+type Translations = typeof translations.TR | typeof translations.EN;
 
 interface LangContextType {
   lang: Lang;
