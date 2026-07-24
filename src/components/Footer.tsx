@@ -5,10 +5,10 @@ import { Link } from 'react-router-dom';
 import { FooterArchBorder } from './BackgroundDecor';
 
 const SOCIAL = [
-  { Icon: Instagram, label: 'Instagram' },
+  { Icon: Instagram, label: 'https://www.instagram.com/uidtoronto/' },
   { Icon: Twitter, label: 'Twitter/X' },
-  { Icon: Facebook, label: 'Facebook' },
-  { Icon: Youtube, label: 'YouTube' },
+  { Icon: Facebook, label: 'https://www.facebook.com/profile.php?id=61586044043053&locale=he_IL' },
+  { Icon: Youtube, label: 'https://www.youtube.com/@UidToronto' },
   { Icon: Linkedin, label: 'LinkedIn' },
 ];
 
